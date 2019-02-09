@@ -13,40 +13,28 @@ import (
 	kitlog "github.com/go-kit/kit/log"
 	promtailclient "github.com/grafana/loki/pkg/promtail/client"
 	"github.com/prometheus/common/model"
+	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 const firehoseSubscriptionId = "paas-loki-exporter"
 
-func main() {
-	dopplerAddress, authToken, parsedLokiUrl := readEnvironment()
-	logger := kitlog.NewLogfmtLogger(kitlog.NewSyncWriter(os.Stderr))
-	promtailClient := createPromtailClient(logger, parsedLokiUrl)
+var (
+	dopplerAddress = kingpin.Arg("doppler-addr", "Doppler Address").Required().Envar("DOPPLER_ADDR").String()
+	authToken      = kingpin.Arg("cf-token", "CF access token").Required().Envar("CF_ACCESS_TOKEN").String()
+	lokiURL        = kingpin.Arg("loki-url", "Loki URL").Required().Envar("LOKI_URL").URL()
+)
 
-	firehoseConsumer := consumer.New(dopplerAddress, &tls.Config{}, nil)
-	msgChan, errorChan := firehoseConsumer.FilteredFirehose(firehoseSubscriptionId, authToken, consumer.LogMessages)
+func main() {
+	kingpin.Parse()
+
+	logger := kitlog.NewLogfmtLogger(kitlog.NewSyncWriter(os.Stderr))
+	promtailClient := createPromtailClient(logger, *lokiURL)
+
+	firehoseConsumer := consumer.New(*dopplerAddress, &tls.Config{}, nil)
+	msgChan, errorChan := firehoseConsumer.FilteredFirehose(firehoseSubscriptionId, *authToken, consumer.LogMessages)
 
 	go readErrorChan(logger, errorChan)
 	forwardMsgChanToPromtail(promtailClient, logger, msgChan)
-}
-
-func readEnvironment() (dopplerAddress string, authToken string, parsedLokiUrl *url.URL) {
-	dopplerAddress, ok := os.LookupEnv("DOPPLER_ADDR")
-	if !ok {
-		log.Fatalf("variable DOPPLER_ADDR must be set")
-	}
-	authToken, ok = os.LookupEnv("CF_ACCESS_TOKEN")
-	if !ok {
-		log.Fatalf("variable CF_ACCESS_TOKEN must be set")
-	}
-	lokiUrl, ok := os.LookupEnv("LOKI_URL")
-	if !ok {
-		log.Fatalf("variable LOKI_URL must be set")
-	}
-	parsedLokiUrl, err := url.Parse(lokiUrl)
-	if err != nil {
-		log.Fatalf("could not parse loki URL (%s) as a URL: %v", lokiUrl, err)
-	}
-	return dopplerAddress, authToken, parsedLokiUrl
 }
 
 func createPromtailClient(logger kitlog.Logger, parsedLokiUrl *url.URL) *promtailclient.Client {
