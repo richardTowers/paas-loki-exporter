@@ -27,8 +27,6 @@ var (
 func main() {
 	kingpin.Parse()
 
-	panic("foo")
-
 	logger := kitlog.NewLogfmtLogger(kitlog.NewSyncWriter(os.Stderr))
 	promtailClient := createPromtailClient(logger, *lokiURL)
 
