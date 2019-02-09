@@ -5,7 +5,7 @@ User haiku:
 
 > Why's my app broken?
 >
-> The logs are stored in loki.
+> I'll read the logs in Loki...
 >
 > Thanks paas-loki-exporter!
 
