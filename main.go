@@ -30,11 +30,25 @@ func main() {
 	logger := kitlog.NewLogfmtLogger(kitlog.NewSyncWriter(os.Stderr))
 	promtailClient := createPromtailClient(logger, *lokiURL)
 
-	firehoseConsumer := consumer.New(*dopplerAddress, &tls.Config{}, nil)
+	firehoseConsumer := consumer.New(*dopplerAddress, &tls.Config{InsecureSkipVerify:true}, nil)
 	msgChan, errorChan := firehoseConsumer.FilteredFirehose(firehoseSubscriptionId, *authToken, consumer.LogMessages)
 
-	go readErrorChan(logger, errorChan)
-	forwardMsgChanToPromtail(promtailClient, logger, msgChan)
+	for {
+		select {
+		case err, ok := <-errorChan:
+			if !ok {
+				log.Fatalf("error channel was closed")
+			} else {
+				_ = logger.Log("level", "error", "message", err.Error())
+			}
+		case msg, ok := <-msgChan:
+			if !ok {
+				log.Fatalf("msg channel was closed")
+			} else {
+				forwardMsgToPromtail(promtailClient, logger, msg)
+			}
+		}
+	}
 }
 
 func createPromtailClient(logger kitlog.Logger, parsedLokiUrl *url.URL) *promtailclient.Client {
@@ -50,25 +64,17 @@ func createPromtailClient(logger kitlog.Logger, parsedLokiUrl *url.URL) *promtai
 	return promtailClient
 }
 
-func readErrorChan(logger kitlog.Logger, errorChan <-chan error) {
-	for err := range errorChan {
-		_ = logger.Log("level", "error", "message", err.Error())
+func forwardMsgToPromtail(promtailClient *promtailclient.Client, logger kitlog.Logger, msg *events.Envelope) {
+	logMessage := msg.LogMessage
+	labelSet := model.LabelSet{
+		"app":          model.LabelValue(logMessage.GetAppId()),
+		"source_type":  model.LabelValue(logMessage.GetSourceType()),
+		"source":       model.LabelValue(logMessage.GetSourceInstance()),
+		"message_type": model.LabelValue(logMessage.GetMessageType().String()),
 	}
-}
-
-func forwardMsgChanToPromtail(promtailClient *promtailclient.Client, logger kitlog.Logger, msgChan <-chan *events.Envelope) {
-	for msg := range msgChan {
-		logMessage := msg.LogMessage
-		labelSet := model.LabelSet{
-			"app":          model.LabelValue(logMessage.GetAppId()),
-			"source_type":  model.LabelValue(logMessage.GetSourceType()),
-			"source":       model.LabelValue(logMessage.GetSourceInstance()),
-			"message_type": model.LabelValue(logMessage.GetMessageType().String()),
-		}
-		promtailError := promtailClient.Handle(labelSet, time.Now(), string(logMessage.Message))
-		if promtailError != nil {
-			_ = logger.Log("level", "error", "message", promtailError.Error())
-		}
-		print(".")
+	promtailError := promtailClient.Handle(labelSet, time.Now(), string(logMessage.Message))
+	if promtailError != nil {
+		_ = logger.Log("level", "error", "message", promtailError.Error())
 	}
+	print(".")
 }
