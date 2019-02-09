@@ -17,7 +17,6 @@ code.cloudfoundry.org/log-cache/pkg/client
 code.cloudfoundry.org/log-cache/pkg/marshaler
 code.cloudfoundry.org/log-cache/pkg/rpc/logcache_v1
 # code.cloudfoundry.org/loggregator v0.0.0-20190208185500-925b09a107d4
-code.cloudfoundry.org/loggregator/integration_tests/endtoend
 code.cloudfoundry.org/loggregator/integration_tests/fakes
 code.cloudfoundry.org/loggregator/testservers
 code.cloudfoundry.org/loggregator/plumbing
