@@ -14,4 +14,5 @@ require (
 	github.com/prometheus/common v0.2.0
 	golang.org/x/net v0.0.0-20190206173232-65e2d4e15006 // indirect
 	google.golang.org/grpc v1.18.0 // indirect
+	gopkg.in/alecthomas/kingpin.v2 v2.2.6
 )
